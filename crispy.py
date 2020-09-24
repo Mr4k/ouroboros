@@ -3,6 +3,7 @@ import dis
 import struct
 
 def n_sum(n, acc = 0):
+    print(n)
     if n == 0:
         return acc
     return n_sum(n - 1, acc + n)
@@ -41,10 +42,19 @@ jump_opcode = dis.opmap['JUMP_ABSOLUTE']#.to_bytes(1, byteorder='little')
 jump_address = 0
 op = struct.pack('BB', jump_opcode, jump_address)
 
-payload = payload[0:26] + op + payload[28:]
+store_fast_opcode = dis.opmap['STORE_FAST']
+
+store_arg_1 = 0
+store_op_1 = struct.pack('BB', store_fast_opcode, store_arg_1)
+
+store_arg_2 = 1
+store_op_2 = struct.pack('BB', store_fast_opcode, store_arg_2)
+
+payload = payload[0:34] + store_op_2 + store_op_1 + op + payload[36:]
 
 print(target(5))  # The result is: 64
 # Now it's (x - y) instead of (x+y)
 fix_function(target, payload)
 print('try again')
+print(dis.dis(target))
 print(target(5))  # The result is: 8
