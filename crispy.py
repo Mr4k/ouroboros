@@ -50,11 +50,11 @@ store_op_1 = struct.pack('BB', store_fast_opcode, store_arg_1)
 store_arg_2 = 1
 store_op_2 = struct.pack('BB', store_fast_opcode, store_arg_2)
 
-payload = payload[0:34] + store_op_2 + store_op_1 + op + payload[36:]
+payload = payload[0:20] + payload[22:34] + store_op_2 + store_op_1 + op + payload[36:]
 
-print(target(5))  # The result is: 64
+#print(target(2000))  # The result is: 64
 # Now it's (x - y) instead of (x+y)
 fix_function(target, payload)
 print('try again')
 print(dis.dis(target))
-print(target(5))  # The result is: 8
+print(target(1000000000))  # The result is: 8

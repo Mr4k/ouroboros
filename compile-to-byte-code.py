@@ -1,6 +1,9 @@
 import ast, dis, astpretty
+import inspect
+import struct
+from types import CodeType
 
-with open('tail.py') as f: module_text = f.read()
+with open('no_tail.py') as f: module_text = f.read()
 module_ast = ast.parse(module_text)
 
 astpretty.pprint(module_ast)
@@ -35,12 +38,88 @@ def is_tail_recursive(node):
 
     return True
 
+# we will use this list to find them in the bytecode later
+tail_recursive_function_ids = []
 for node in ast.walk(module_ast):
     if isinstance(node, ast.FunctionDef):
-        print(node.name, is_tail_recursive(node))
-            
+        if is_tail_recursive(node):
+            tail_recursive_function_ids.append(node.name)
+            print(node.name, is_tail_recursive(node))
 
 module_code = compile(module_ast, 'tail.py', 'exec')
+
+# let's find our functions
 dis.show_code(module_code)
 
 dis.dis(module_code)
+
+def get_functions(code):
+    functions_by_id = {}
+    for instr in dis.get_instructions(code):
+        if inspect.iscode(instr.argval):
+            functions_by_id[instr.argval.co_name] = instr.argval
+            sub_functions = get_functions(instr.argval)
+            # TODO note scopes will be a problem here
+            # sub functions maybe can have identical names to existing functions
+            # see if the AST already does something about this
+            for key in sub_functions.keys():
+                functions_by_id[key] = sub_functions[key]
+    return functions_by_id
+
+function_ids_to_code = get_functions(module_code)
+
+def edit_function_code(fn_code, payload):
+    return CodeType(fn_code.co_argcount,
+            fn_code.co_kwonlyargcount,
+            fn_code.co_nlocals,
+            fn_code.co_stacksize,
+            fn_code.co_flags,
+            payload,
+            fn_code.co_consts,
+            fn_code.co_names,
+            fn_code.co_varnames,
+            fn_code.co_filename,
+            fn_code.co_name,
+            fn_code.co_firstlineno,
+            fn_code.co_lnotab,
+            fn_code.co_freevars,
+            fn_code.co_cellvars,
+            )
+
+def pack_op(opcode_str, arg):
+    return struct.pack('BB', dis.opmap[opcode_str], arg)
+
+def surgery(function_code):
+    payload = function_code.co_code
+    for instr in dis.get_instructions(function_code):
+        if instr.opname == 'CALL_FUNCTION':
+            pos = instr.offset
+            nargs = instr.arg
+            # in this case 0 jumps to the beginning of the function
+            jump = pack_op('JUMP_ABSOLUTE', 0)
+
+            store_args = []
+            for arg_n in reversed(range(nargs)):
+                store_args.append(pack_op('STORE_FAST', arg_n))
+
+            # we pop the function handle off the top of the stack
+            # TODO it's probably more efficient to remove the instruction
+            # which loads in onto the stack in the first place
+            pop_top = pack_op('POP_TOP', 0)
+
+            # certainly not the most efficient method of byte str concat
+            # but this is fine for now
+            before = payload[:pos]
+            for store in store_args:
+                before += store
+            before += pop_top
+            before += jump
+            after = payload[pos+2:]
+            payload = before + after
+            
+    return edit_function_code(function_code, payload)
+
+for f_id in tail_recursive_function_ids:
+    print('hello', f_id)
+    print(surgery(function_ids_to_code[f_id]))
+    dis.dis(surgery(function_ids_to_code[f_id]))
