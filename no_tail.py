@@ -1,8 +1,8 @@
 # should return yes
-def n_sum(n, acc = 0):
+def test1(n, acc = 0):
     if n == 0:
         return acc
-    return n_sum(n - 1, acc + n)
+    return test1(n - 1, acc + n)
 
 # should current return no even though it maybe could be
 def test2(n, acc = 0):
@@ -27,5 +27,4 @@ def test4(n):
 def ouroboros():
     return ouroboros()
 
-
-
+ouroboros()

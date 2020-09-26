@@ -39,11 +39,11 @@ def is_tail_recursive(node):
     return True
 
 # we will use this list to find them in the bytecode later
-tail_recursive_function_ids = []
+tail_recursive_function_ids = {}
 for node in ast.walk(module_ast):
     if isinstance(node, ast.FunctionDef):
         if is_tail_recursive(node):
-            tail_recursive_function_ids.append(node.name)
+            tail_recursive_function_ids[node.name] = 1
             print(node.name, is_tail_recursive(node))
 
 module_code = compile(module_ast, 'tail.py', 'exec')
@@ -53,29 +53,14 @@ dis.show_code(module_code)
 
 dis.dis(module_code)
 
-def get_functions(code):
-    functions_by_id = {}
-    for instr in dis.get_instructions(code):
-        if inspect.iscode(instr.argval):
-            functions_by_id[instr.argval.co_name] = instr.argval
-            sub_functions = get_functions(instr.argval)
-            # TODO note scopes will be a problem here
-            # sub functions maybe can have identical names to existing functions
-            # see if the AST already does something about this
-            for key in sub_functions.keys():
-                functions_by_id[key] = sub_functions[key]
-    return functions_by_id
-
-function_ids_to_code = get_functions(module_code)
-
-def edit_function_code(fn_code, payload):
+def edit_function_code(fn_code, payload, new_consts):
     return CodeType(fn_code.co_argcount,
             fn_code.co_kwonlyargcount,
             fn_code.co_nlocals,
             fn_code.co_stacksize,
             fn_code.co_flags,
             payload,
-            fn_code.co_consts,
+            new_consts,
             fn_code.co_names,
             fn_code.co_varnames,
             fn_code.co_filename,
@@ -117,9 +102,28 @@ def surgery(function_code):
             after = payload[pos+2:]
             payload = before + after
             
-    return edit_function_code(function_code, payload)
+    return payload
 
-for f_id in tail_recursive_function_ids:
-    print('hello', f_id)
-    print(surgery(function_ids_to_code[f_id]))
-    dis.dis(surgery(function_ids_to_code[f_id]))
+def optimize_tail_calls(code, tail_recursive_function_ids):
+    new_consts = []
+    for const in code.co_consts:
+        if inspect.iscode(const):
+            new_consts.append(optimize_tail_calls(const, tail_recursive_function_ids))
+            #functions_by_id[instr.argval.co_name] = const.
+            #sub_functions = optimized_tail_calls(instr.argval)
+            # TODO note scopes will be a problem here
+            # sub functions maybe can have identical names to existing functions
+            # see if the AST already does something about this
+            """for key in sub_functions.keys():
+                functions_by_id[key] = sub_functions[key]"""
+        else:
+            new_consts.append(const)
+    payload = code.co_code
+    if code.co_name in tail_recursive_function_ids:
+        payload = surgery(code)
+    return edit_function_code(code, payload, tuple(new_consts))
+
+new_code = optimize_tail_calls(module_code, tail_recursive_function_ids)
+
+print('!!!new code!!!')
+exec(new_code)
