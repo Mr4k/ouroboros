@@ -13,7 +13,7 @@ astpretty.pprint(module_ast)
 # this definiton will be expanded later 
 # TODO read about how Java / other pls do tail recursion
 # For now the definition is:
-# A function can be tail call optimized if
+# A sub function call can be tail call optimized if
 # all of the function calls it makes are
 # 1) are the sole children of the return statements
 # 2) are all calls to the parent function

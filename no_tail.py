@@ -27,4 +27,4 @@ def test4(n):
 def ouroboros():
     return ouroboros()
 
-ouroboros()
+print(test1(1000000))
